@@ -6,20 +6,24 @@ from flask import current_app, g
 
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS riders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS notes (
+CREATE TABLE IF NOT EXISTS dragons (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
+    rider_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    species TEXT NOT NULL,
+    element TEXT NOT NULL,
+    age INTEGER NOT NULL CHECK (age >= 0),
+    description TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    FOREIGN KEY (rider_id) REFERENCES riders (id) ON DELETE CASCADE,
+    UNIQUE (rider_id, name)
 );
 """
 
@@ -66,7 +70,7 @@ def verify_password(password, password_hash):
         return False
 
 
-def create_user(username, password):
+def create_rider(username, password):
     if not isinstance(username, str) or not 3 <= len(username) <= 50:
         raise ValueError("Username must contain 3-50 characters")
     if not isinstance(password, str) or not validate_password(password):
@@ -77,26 +81,43 @@ def create_user(username, password):
 
     database = get_db()
     try:
-        database.execute(
-            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+        cursor = database.execute(
+            "INSERT INTO riders (username, password_hash) VALUES (?, ?)",
             (username, hash_password(password)),
         )
         database.commit()
+        return cursor.lastrowid
     except sqlite3.IntegrityError as error:
-        raise ValueError("User already exists") from error
+        raise ValueError("Rider already exists") from error
+
+
+def seed_dragons(rider_id):
+    database = get_db()
+    database.executemany(
+        """
+        INSERT INTO dragons (rider_id, name, species, element, age, description)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (rider_id, "Искра", "Небесный дракон", "fire", 120, "Быстрый и преданный"),
+            (rider_id, "Север", "Ледяной виверн", "ice", 87, "Хранитель горных перевалов"),
+        ],
+    )
+    database.commit()
 
 
 @click.command("init-db")
-@click.option("--username", prompt=True, help="Initial username")
+@click.option("--username", prompt="Rider username", help="Initial rider username")
 @click.password_option(confirmation_prompt=True)
 def init_db_command(username, password):
-    """Create database tables and the first user."""
+    """Create database tables, the first rider, and a demo collection."""
     init_db()
     try:
-        create_user(username, password)
+        rider_id = create_rider(username, password)
+        seed_dragons(rider_id)
     except ValueError as error:
         raise click.ClickException(str(error)) from error
-    click.echo("Database initialized and user created.")
+    click.echo("Dragon registry initialized and rider created.")
 
 
 def init_app(app):

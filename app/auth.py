@@ -46,7 +46,7 @@ def token_required(view):
             return jsonify(error="Invalid or expired token"), 401
 
         user = get_db().execute(
-            "SELECT id, username FROM users WHERE id = ?", (user_id,)
+            "SELECT id, username FROM riders WHERE id = ?", (user_id,)
         ).fetchone()
         if user is None:
             return jsonify(error="Invalid or expired token"), 401
@@ -71,7 +71,7 @@ def login():
         return jsonify(error="Invalid credentials"), 401
 
     user = get_db().execute(
-        "SELECT id, username, password_hash FROM users WHERE username = ?", (username,)
+        "SELECT id, username, password_hash FROM riders WHERE username = ?", (username,)
     ).fetchone()
     if user is None or not verify_password(password, user["password_hash"]):
         return jsonify(error="Invalid credentials"), 401

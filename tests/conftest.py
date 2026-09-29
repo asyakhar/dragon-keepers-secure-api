@@ -1,7 +1,7 @@
 import pytest
 
 from app import create_app
-from app.db import create_user, init_db
+from app.db import create_rider, init_db, seed_dragons
 
 
 @pytest.fixture()
@@ -16,7 +16,8 @@ def app(tmp_path):
     )
     with application.app_context():
         init_db()
-        create_user("student", "Strong-Test1!")
+        rider_id = create_rider("student", "Strong-Test1!")
+        seed_dragons(rider_id)
     yield application
 
 

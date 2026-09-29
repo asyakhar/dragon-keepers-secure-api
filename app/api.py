@@ -1,3 +1,4 @@
+import sqlite3
 from html import escape
 
 from flask import Blueprint, g, jsonify, request
@@ -8,70 +9,94 @@ from .db import get_db
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
+ALLOWED_ELEMENTS = {"fire", "ice", "storm", "earth", "shadow", "light"}
+
 
 def safe_text(value):
     return escape(value, quote=True)
 
 
+def serialize_dragon(row):
+    return {
+        "id": row["id"],
+        "name": safe_text(row["name"]),
+        "species": safe_text(row["species"]),
+        "element": row["element"],
+        "age": row["age"],
+        "description": safe_text(row["description"]),
+        "created_at": row["created_at"],
+    }
+
+
 @api_bp.get("/data")
 @token_required
-def get_data():
+def get_dragon_collection():
+    dragons = get_db().execute(
+        """
+        SELECT id, name, species, element, age, description, created_at
+        FROM dragons
+        WHERE rider_id = ?
+        ORDER BY id
+        """,
+        (g.current_user["id"],),
+    ).fetchall()
     return jsonify(
-        user=safe_text(g.current_user["username"]),
-        data=[
-            {"id": 1, "message": "Protected information"},
-            {"id": 2, "message": "Only authenticated users can see this"},
-        ],
+        rider=safe_text(g.current_user["username"]),
+        collection_size=len(dragons),
+        dragons=[serialize_dragon(row) for row in dragons],
     )
 
-@api_bp.post("/notes")
+
+@api_bp.post("/dragons")
 @token_required
-def create_note():
+def add_dragon():
     if not request.is_json:
         return jsonify(error="JSON body required"), 415
 
     body = request.get_json(silent=True) or {}
-    title = body.get("title")
-    content = body.get("content")
-    if not isinstance(title, str) or not isinstance(content, str):
-        return jsonify(error="Title and content are required"), 400
-    title = title.strip()
-    content = content.strip()
-    if not title or not content or len(title) > 100 or len(content) > 2000:
-        return jsonify(error="Title/content length is invalid"), 400
+    name = body.get("name")
+    species = body.get("species")
+    element = body.get("element")
+    age = body.get("age")
+    description = body.get("description")
+
+    text_fields = (name, species, element, description)
+    if not all(isinstance(value, str) for value in text_fields) or not isinstance(age, int):
+        return jsonify(error="Invalid dragon data types"), 400
+
+    name = name.strip()
+    species = species.strip()
+    element = element.strip().lower()
+    description = description.strip()
+    valid = (
+        2 <= len(name) <= 50
+        and 2 <= len(species) <= 80
+        and element in ALLOWED_ELEMENTS
+        and 0 <= age <= 10_000
+        and len(description) <= 500
+    )
+    if not valid:
+        return jsonify(error="Dragon data failed validation"), 400
 
     database = get_db()
-    cursor = database.execute(
-        "INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)",
-        (g.current_user["id"], title, content),
-    )
-    database.commit()
+    try:
+        cursor = database.execute(
+            """
+            INSERT INTO dragons (rider_id, name, species, element, age, description)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (g.current_user["id"], name, species, element, age, description),
+        )
+        database.commit()
+    except sqlite3.IntegrityError:
+        return jsonify(error="A dragon with this name already exists in your collection"), 409
 
-    return (
-        jsonify(
-            id=cursor.lastrowid,
-            title=safe_text(title),
-            content=safe_text(content),
-        ),
-        201,
-    )
-
-
-@api_bp.get("/notes")
-@token_required
-def list_notes():
-    notes = get_db().execute(
-        "SELECT id, title, content, created_at FROM notes WHERE user_id = ? ORDER BY id",
-        (g.current_user["id"],),
-    ).fetchall()
-    return jsonify(
-        notes=[
-            {
-                "id": row["id"],
-                "title": safe_text(row["title"]),
-                "content": safe_text(row["content"]),
-                "created_at": row["created_at"],
-            }
-            for row in notes
-        ]
-    )
+    dragon = database.execute(
+        """
+        SELECT id, name, species, element, age, description, created_at
+        FROM dragons
+        WHERE id = ? AND rider_id = ?
+        """,
+        (cursor.lastrowid, g.current_user["id"]),
+    ).fetchone()
+    return jsonify(dragon=serialize_dragon(dragon)), 201
