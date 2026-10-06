@@ -2,7 +2,7 @@
 
 [![Security CI](https://github.com/asyakhar/dragon-keepers-secure-api/actions/workflows/ci.yml/badge.svg)](https://github.com/asyakhar/dragon-keepers-secure-api/actions/workflows/ci.yml)
 
-Небольшой учебный API на Flask для лабораторной работы по информационной безопасности. По смыслу это реестр всадников и их драконов: всадник входит в систему, получает JWT-токен и после этого может посмотреть свою коллекцию или добавить в неё нового дракона.
+Учебный API на Flask для лабораторной работы по информационной безопасности. Это реестр всадников и их драконов: всадник входит в систему, получает JWT-токен и после этого может посмотреть свою коллекцию или добавить в неё нового дракона.
 
 У каждого всадника своя коллекция. Идентификатор владельца берётся из проверенного токена, поэтому передать в запросе чужой `rider_id` и получить чужие данные нельзя.
 
@@ -133,7 +133,7 @@ API работает с JSON и не формирует HTML-страницы, �
 
 ## Тесты и проверки безопасности
 
-Локально все проверки запускаются так:
+Локально все проверки можно запустить тремя командами:
 
 ```bash
 python -m pytest -q
@@ -141,26 +141,25 @@ bandit -r app
 pip-audit -r requirements.txt
 ```
 
-Workflow [Security CI](https://github.com/asyakhar/dragon-keepers-secure-api/actions/workflows/ci.yml) выполняется при каждом `push` и `pull_request`. Сначала запускаются тесты, затем:
+В репозитории эти же проверки выполняются автоматически через workflow [Security CI](https://github.com/asyakhar/dragon-keepers-secure-api/actions/workflows/ci.yml). Он запускается при каждом `push` и `pull_request`.
 
-- **Bandit (SAST)** просматривает Python-код и ищет небезопасные конструкции;
-- **pip-audit (SCA)** сверяет установленные зависимости с базой известных уязвимостей;
-- JSON-отчёты сохраняются в artifact `security-reports` внутри запуска Actions.
+### Успешный запуск CI
 
-### Результат Bandit (SAST)
+На скриншоте показан запуск `Security CI #5`: задача `test-and-scan` завершилась успешно. Внизу страницы доступен артефакт `security-reports` с JSON-отчётами сканеров.
 
-Проблем не найдено: количество замечаний уровней Low, Medium и High равно нулю.
+![Успешный запуск Security CI и артефакт с отчётами](docs/screenshots/actions-success.png)
 
-![Результат SAST-проверки Bandit](docs/screenshots/bandit-sast.png)
+### SAST: проверка исходного кода с помощью Bandit
 
-### Результат pip-audit (SCA)
+Bandit просматривает Python-код и ищет потенциально небезопасные конструкции. В workflow он запускается командой `bandit -r app -f json -o bandit-report.json`. Проверка завершилась успешно, после чего результат был записан в `bandit-report.json`.
 
-В используемых версиях зависимостей известных уязвимостей не найдено.
+На этом же скриншоте виден результат SCA-проверки: `pip-audit` не обнаружил известных уязвимостей в зависимостях проекта.
 
-![Результат SCA-проверки pip-audit](docs/screenshots/pip-audit-sca.png)
+![Успешные этапы Bandit и pip-audit в GitHub Actions](docs/screenshots/security-scans-actions.png)
 
-Актуальный статус и полный журнал выполнения доступны в разделе [Actions](https://github.com/asyakhar/dragon-keepers-secure-api/actions).
+В отчёте Bandit массив `results` пуст, а количество замечаний уровней Low, Medium и High равно нулю. Всего было проверено 294 строки кода, пропущенных тестов и подавленных предупреждений нет.
 
-## Важно
+![Итоговый JSON-отчёт Bandit без найденных проблем](docs/screenshots/bandit-report.png)
 
-Это учебный проект. В репозиторий не нужно добавлять файл `.env`, базу из папки `instance`, реальные пароли, секрет `JWT_SECRET` или действующие JWT-токены.
+Полный журнал последнего проверенного запуска находится в [GitHub Actions](https://github.com/asyakhar/dragon-keepers-secure-api/actions/runs/36712009332).
+
